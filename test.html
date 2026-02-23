@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>포켓몬 비동기 대조 테스트 (Refactored)</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; text-align: center; background: #f9f9f9; }
+        .monitor { background: #333; color: #fff; padding: 20px; margin-bottom: 20px; position: sticky; top: 0; z-index: 100; }
+        
+        #sprite-checker { 
+            position: relative; width: 60px; height: 60px; 
+            background: url('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png') no-repeat center;
+            background-size: contain; margin: 0 auto;
+        }
+
+        .container { display: flex; justify-content: center; gap: 20px; padding: 20px; }
+        .column { width: 45%; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        
+        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 15px; min-height: 400px; padding: 10px; background: #eee; border-radius: 10px; }
+        .card { background: white; border-radius: 8px; padding: 5px; font-size: 11px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .card img { width: 100%; height: auto; display: block; }
+        
+        button { width: 100%; padding: 18px; cursor: pointer; border: none; border-radius: 10px; color: white; font-weight: bold; margin-bottom: 15px; font-size: 1.1rem; transition: 0.2s; }
+        .sync-btn { background: #ff4757; }
+        .sync-btn:hover { background: #ff6b81; }
+        .async-btn { background: #1e90ff; }
+        .async-btn:hover { background: #70a1ff; }
+        
+        input { width: 90%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; outline: none; }
+        input:focus { border-color: #1e90ff; }
+        .status { font-weight: bold; font-size: 1.2rem; margin-top: 10px; color: #555; }
+    </style>
+</head>
+<body>
+
+    <div class="monitor">
+        <div id="sprite-checker"></div>
+        <p>피카츄가 멈추면 메인 스레드가 죽은 것입니다.</p>
+        <input type="text" placeholder="실행 중에 글자를 입력해서 키보드 반응을 확인하세요.">
+    </div>
+
+    <div class="container">
+        <div class="column">
+            <button class="sync-btn" onclick="runSync()">동기(Sync) 로딩<br>브라우저 마비</button>
+            <div id="sync-status" class="status">대기 중...</div>
+            <div id="sync-grid" class="grid"></div>
+        </div>
+
+        <div class="column">
+            <button class="async-btn" onclick="runAsync()">비동기(Async) 로딩<br>브라우저 생존</button>
+            <div id="async-status" class="status">대기 중...</div>
+            <div id="async-grid" class="grid"></div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * 핵심 설정 (Configuration)
+         * 하드코딩을 피하기 위해 모든 제어 변수를 상단에 배치합니다.
+         */
+        const CONFIG = {
+            TOTAL_POKEMON: 60,      // 생성할 포켓몬 수
+            HEAVY_MS: 40,           // 각 루프당 강제 부하 시간 (ms)
+            SPRITE_SPEED: 3,        // 피카츄 이동 속도 (px/frame)
+            SPRITE_LIMIT: 200,      // 피카츄 이동 범위
+            SPRITE_IMAGE: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png'
+        };
+
+        // 1. 메인 스레드 감시용 애니메이션 (JS 스케줄링)
+        const checker = document.getElementById('sprite-checker');
+        let posX = 0;
+        let diff = CONFIG.SPRITE_SPEED;
+
+        function animate() {
+            posX += diff;
+            if (Math.abs(posX) > CONFIG.SPRITE_LIMIT) diff *= -1;
+            checker.style.left = posX + 'px';
+            requestAnimationFrame(animate); 
+        }
+        animate();
+
+        // 부하 시뮬레이션 함수
+        function heavyTask(ms) {
+            const end = Date.now() + ms;
+            while (Date.now() < end) { /* CPU 점유 */ }
+        }
+
+        // 포켓몬 카드 생성 헬퍼
+        function createPokeCard(id) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png" loading="lazy">
+                <b>No.${id}</b>
+            `;
+            return card;
+        }
+
+        // 2. 동기(Sync) 처리: 반복문이 끝날 때까지 메인 스레드를 놓아주지 않음
+        function runSync() {
+            const grid = document.getElementById('sync-grid');
+            const status = document.getElementById('sync-status');
+            grid.innerHTML = '';
+            const start = Date.now();
+
+            for (let i = 1; i <= CONFIG.TOTAL_POKEMON; i++) {
+                heavyTask(CONFIG.HEAVY_MS); 
+                grid.appendChild(createPokeCard(i));
+                
+                // 아래 텍스트 변경은 렌더링 큐에 쌓이지만, 함수가 끝나기 전까지 화면에 그려지지 않음
+                status.textContent = `${i}마리 로드 중... (마비)`;
+            }
+            
+            const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            status.textContent = `✅ 완료! (${elapsed}s)`;
+        }
+
+        // 3. 비동기(Async) 처리: await를 통해 이벤트 루프에 제어권을 양보함
+        async function runAsync() {
+            const grid = document.getElementById('async-grid');
+            const status = document.getElementById('async-status');
+            grid.innerHTML = '';
+            const start = Date.now();
+
+            for (let i = 1; i <= CONFIG.TOTAL_POKEMON; i++) {
+                // 한 틱(Tick)을 양보하여 브라우저가 애니메이션을 그리고 입력을 받게 함
+                await new Promise(resolve => setTimeout(resolve, 0));
+                
+                heavyTask(CONFIG.HEAVY_MS); 
+                grid.appendChild(createPokeCard(i));
+                status.textContent = `${i}마리 합류 중! (정상)`;
+            }
+            
+            const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            status.textContent = `✅ 완료! (${elapsed}s)`;
+        }
+    </script>
+</body>
+</html>
