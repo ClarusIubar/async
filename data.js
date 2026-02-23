@@ -4,3 +4,6 @@ const data = [
   { name: "맨투맨", age: 25, nickname: "옷" },
   { name: "원펀맨", age: 27, nickname: "대머리" },
 ];
+
+
+export default data
