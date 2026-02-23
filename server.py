@@ -38,10 +38,10 @@ class TestServer(BaseHTTPRequestHandler):
         if self.path == "/":
             self.send_response(200)
 
-            # 2. CORS 헤더 추가 (어디서 요청하든 받아주겠다는 뜻)
+            # CORS 헤더 추가 (어디서 요청하든 받아주겠다는 뜻)
             self.send_header("Access-Control-Allow-Origin", "*")
 
-            # 3. 돌려줄 데이터가 json이므로 application/json으로 명확히 지정
+            # 돌려줄 데이터가 json이므로 application/json으로 명확히 지정
             self.send_header("Content-type", "application/json; charset=utf-8")
             self.end_headers()
 
