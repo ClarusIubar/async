@@ -1,20 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>비동기 테스트</title>
+    <title>비동기 통신 미션</title>
   </head>
   <body>
+    <h1>영웅 선택</h1>
     <form>
-      <select>
+      <select id="hero-select">
         <option value="슈퍼맨">슈퍼맨</option>
         <option value="배트맨">배트맨</option>
         <option value="맨투맨">맨투맨</option>
         <option value="원펀맨">원펀맨</option>
       </select>
-      <button type="submit">제출</button>
+      <button type="submit" id="submit-btn">제출</button>
     </form>
+    <div id="result-display" style="margin-top: 20px; font-weight: bold;"></div>
+
     <script src="main.js" type="module"></script>
   </body>
 </html>

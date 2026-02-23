@@ -5,5 +5,4 @@ const data = [
   { name: "원펀맨", age: 27, nickname: "대머리" },
 ];
 
-
-export default data
+export default data;
