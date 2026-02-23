@@ -1,0 +1,15 @@
+미션 : data.json에 있는 데이터를 ajax기반으로
+비동기 통신해보기
+
+1. index.html에서 select 값을 정한다.
+2. select에서 슈퍼맨, 배트맨, 맨투맨, 원펀맨중의 값을 가져온다.
+3. select에서 가져온 값을 main.js의 ajaxTest에서 가져온다.
+4. ajaxTest에서 select의 값에 따라 data.js에서 값을 가져온다.
+5. data.js에서 가져온 객체 값을 json으로 변환한다.
+6. json 데이터를 비동기 방식으로 server로 전송한다.
+7. server에서는 받아온 값을 객체로 다시 변환한다.
+8. 가져온 객체에 따라 값을 f-string 처리
+8-1. 예를들어 데이터 중에 { name: "슈퍼맨", age: 30, nickname: "슈퍼" }를 받았을 경우
+{"result" : f"그는 {name}이고 나이는 {age}살이고 별명은 {nickname}이다."}라는 대답을 저장
+9. f-string처리된 객체 형태의 대답을 json형태로 프론트엔드로 전달
+10. 프론트엔드에서 받은 json 데이터를 객체로 변환하여 전달
