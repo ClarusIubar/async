@@ -2,125 +2,168 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>REST API Sync vs Async 실시간 대조</title>
+    <title>REST API: 일괄 렌더링 성능 대조 테스트</title>
     <style>
         :root { --sync-color: #ff4757; --async-color: #1e90ff; }
-        body { font-family: 'Malgun Gothic', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; color: #333; }
         
-        /* 모니터링 영역 */
-        .monitor-panel { background: #222; color: #00ff00; padding: 15px; border-radius: 10px; margin-bottom: 20px; position: sticky; top: 10px; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        #checker-box { width: 100%; height: 50px; position: relative; border-bottom: 1px solid #444; margin-bottom: 10px; }
-        #pika-sprite { position: absolute; width: 50px; height: 50px; background: url('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png') no-repeat center/contain; }
+        /* 실시간 메인 스레드 모니터 */
+        .monitor-panel { background: #1e1e1e; color: #00ff00; padding: 20px; border-radius: 12px; margin-bottom: 25px; position: sticky; top: 10px; z-index: 1000; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        #checker-box { width: 100%; height: 60px; position: relative; border-bottom: 1px solid #333; margin-bottom: 10px; overflow: hidden; }
+        #pika-sprite { position: absolute; width: 60px; height: 60px; background: url('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png') no-repeat center/contain; }
+        .monitor-txt { font-family: monospace; font-size: 0.9rem; }
+
+        /* 레이아웃 디자인 */
+        .container { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; max-width: 1200px; margin: 0 auto; }
+        .column { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); display: flex; flex-direction: column; }
         
-        /* 레이아웃 */
-        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .column { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        
-        /* 버튼 및 상태 */
-        button { width: 100%; padding: 15px; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; font-size: 1rem; margin-bottom: 10px; }
+        /* 컨트롤 섹션 */
+        button { width: 100%; padding: 18px; border: none; border-radius: 10px; color: white; font-weight: bold; cursor: pointer; font-size: 1.1rem; margin-bottom: 15px; transition: transform 0.1s, opacity 0.2s; }
+        button:active { transform: scale(0.98); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-sync { background: var(--sync-color); }
         .btn-async { background: var(--async-color); }
-        .status-badge { font-size: 0.9rem; padding: 5px 10px; border-radius: 20px; background: #eee; color: #333; display: inline-block; margin-bottom: 10px; }
         
-        /* 데이터 렌더링 영역 */
-        .log-window { height: 300px; overflow-y: auto; background: #f9f9f9; border: 1px solid #ddd; border-radius: 5px; padding: 10px; font-family: monospace; font-size: 12px; text-align: left; }
-        .poke-item { border-bottom: 1px solid #eee; padding: 4px 0; display: flex; align-items: center; gap: 10px; }
-        .poke-item img { width: 30px; }
+        .status-badge { font-weight: bold; font-size: 1.1rem; margin-bottom: 15px; padding: 10px; border-radius: 8px; background: #f0f0f0; text-align: center; }
+
+        /* 결과 창 */
+        .display-window { flex-grow: 1; height: 500px; overflow-y: auto; background: #fafafa; border: 2px dashed #ddd; border-radius: 10px; padding: 15px; display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; align-content: start; }
+        .poke-card { background: white; border: 1px solid #eee; border-radius: 8px; padding: 8px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); animation: fadeIn 0.3s ease-in; }
+        .poke-card img { width: 100%; height: auto; }
+        .poke-card b { font-size: 0.75rem; display: block; margin-top: 5px; color: #555; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
     <div class="monitor-panel">
         <div id="checker-box"><div id="pika-sprite"></div></div>
-        <div>[Main Thread Status] 피카츄가 멈추면 브라우저의 모든 작업이 중단된 것입니다.</div>
+        <div class="monitor-txt">
+            [System Monitor] <b>Pikachu Motion:</b> Active (Main Thread Running)<br>
+            [Instruction] 두 버튼을 눌러보세요. 동기 방식은 완료까지 한참 걸리지만, 비동기는 순식간에 끝납니다.
+        </div>
     </div>
 
-    <div class="grid-container">
+    <div class="container">
         <div class="column">
-            <button class="btn-sync" onclick="runSyncTest()">동기(Sequential) 호출 시작</button>
+            <button id="sync-btn" class="btn-sync" onclick="runSyncTest()">동기(Sequential) 수집<br><small>하나씩 차례대로 대기</small></button>
             <div id="sync-status" class="status-badge">대기 중...</div>
-            <div id="sync-log" class="log-window"></div>
+            <div id="sync-display" class="display-window"></div>
         </div>
 
         <div class="column">
-            <button class="btn-async" onclick="runAsyncTest()">비동기(Parallel) 호출 시작</button>
+            <button id="async-btn" class="btn-async" onclick="runAsyncTest()">비동기(Parallel) 수집<br><small>동시에 모든 요청 전송</small></button>
             <div id="async-status" class="status-badge">대기 중...</div>
-            <div id="async-log" class="log-window"></div>
+            <div id="async-display" class="display-window"></div>
         </div>
     </div>
 
     <script>
-        const CONFIG = { TOTAL: 20, BASE_URL: 'https://pokeapi.co/api/v2/pokemon/' };
+        /**
+         * 핵심 설정 (Core Configuration)
+         */
+        const CONFIG = {
+            TOTAL_POKEMON: 200, // 체감을 위해 개수를 30개로 설정
+            BASE_URL: 'https://pokeapi.co/api/v2/pokemon/'
+        };
 
-        // 1. 애니메이션 제어 (메인 스레드 생존 확인용)
+        // 1. 애니메이션 제어 (메인 스레드 감시용)
         const pika = document.getElementById('pika-sprite');
         let pos = 0; let direction = 1;
         function animate() {
-            pos += 2 * direction;
-            if (pos > document.getElementById('checker-box').offsetWidth - 50 || pos < 0) direction *= -1;
+            const boxWidth = document.getElementById('checker-box').offsetWidth;
+            pos += 3 * direction;
+            if (pos > boxWidth - 60 || pos < 0) direction *= -1;
             pika.style.left = pos + 'px';
             requestAnimationFrame(animate);
         }
         animate();
 
-        // 2. 단일 데이터 Fetch 및 정제 (Core Extraction)
-        async function getPokemon(id) {
-            const res = await fetch(`${CONFIG.BASE_URL}${id}`);
-            const d = await res.json();
-            return { id: d.id, name: d.name, img: d.sprites.front_default };
+        // 2. 단일 데이터 추출 (Core Extraction)
+        async function fetchPokemon(id) {
+            try {
+                const res = await fetch(`${CONFIG.BASE_URL}${id}`);
+                const d = await res.json();
+                return { id: d.id, name: d.name, img: d.sprites.front_default };
+            } catch (e) {
+                return null;
+            }
         }
 
-        // 로그 출력 함수
-        function logToWindow(targetId, pokemon) {
-            const win = document.getElementById(targetId);
-            const item = document.createElement('div');
-            item.className = 'poke-item';
-            item.innerHTML = `<img src="${pokemon.img}"> <b>No.${pokemon.id}</b> ${pokemon.name}`;
-            win.prepend(item);
+        // 3. 일괄 렌더링 함수 (UI Update)
+        function renderAll(targetId, dataList) {
+            const container = document.getElementById(targetId);
+            container.innerHTML = ''; // 초기화
+            
+            const fragment = document.createDocumentFragment();
+            dataList.forEach(p => {
+                if(!p) return;
+                const card = document.createElement('div');
+                card.className = 'poke-card';
+                card.innerHTML = `<img src="${p.img}"><b>No.${p.id}<br>${p.name}</b>`;
+                fragment.appendChild(card);
+            });
+            container.appendChild(fragment);
         }
 
         /**
-         * [테스트 1] 동기적 순차 호출
-         * await가 반복문 안에 있어 하나가 완전히 끝날 때까지 대기합니다.
+         * [동기적 방식] 순차 수집 후 렌더링
          */
         async function runSyncTest() {
-            const logWin = document.getElementById('sync-log');
+            const btn = document.getElementById('sync-btn');
             const status = document.getElementById('sync-status');
-            logWin.innerHTML = '';
+            const display = document.getElementById('sync-display');
+            
+            // 초기화
+            btn.disabled = true;
+            display.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding-top:100px;">데이터 순차 수집 중...<br>네트워크 응답을 하나씩 기다리고 있습니다.</div>';
+            
             const start = Date.now();
+            const storage = [];
 
-            for (let i = 1; i <= CONFIG.TOTAL; i++) {
-                status.textContent = `진행 중: ${i}/${CONFIG.TOTAL}`;
-                const data = await getPokemon(i); // 여기서 매번 대기 (순차)
-                logToWindow('sync-log', data);
+            // 순차적 루프: await가 루프 안에 있어 병목 현상 발생
+            for (let i = 1; i <= CONFIG.TOTAL_POKEMON; i++) {
+                status.textContent = `수집 중: ${i} / ${CONFIG.TOTAL_POKEMON}`;
+                const data = await fetchPokemon(i); // 이전 요청 완료 전까지 절대 안 넘어감
+                storage.push(data);
             }
 
-            const time = ((Date.now() - start) / 1000).toFixed(2);
-            status.textContent = `✅ 완료: ${time}초 소요`;
+            // 모든 수집이 끝나야만 화면에 그림
+            renderAll('sync-display', storage);
+            
+            const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            status.textContent = `✅ 완료: ${elapsed}초 소요`;
+            btn.disabled = false;
         }
 
         /**
-         * [테스트 2] 비동기적 병렬 호출
-         * 모든 요청을 동시에 던지고, 결과가 오는 순서대로 처리합니다.
+         * [비동기적 방식] 병렬 수집 후 렌더링
          */
         async function runAsyncTest() {
-            const logWin = document.getElementById('async-log');
+            const btn = document.getElementById('async-btn');
             const status = document.getElementById('async-status');
-            logWin.innerHTML = '';
+            const display = document.getElementById('async-display');
+
+            // 초기화
+            btn.disabled = true;
+            display.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding-top:100px;">데이터 병렬 수집 중...<br>모든 요청을 동시에 보냈습니다.</div>';
+            
             const start = Date.now();
 
-            // 모든 Promise를 생성 (즉시 병렬 네트워크 요청 시작)
-            const promises = Array.from({ length: CONFIG.TOTAL }, (_, i) => 
-                getPokemon(i + 1).then(data => {
-                    logToWindow('async-log', data); // 각 데이터 도착 즉시 렌더링
-                    return data;
-                })
-            );
+            // 1. 모든 Promise를 즉시 생성 (네트워크 요청 동시 발송)
+            const tasks = Array.from({ length: CONFIG.TOTAL_POKEMON }, (_, i) => fetchPokemon(i + 1));
 
-            await Promise.all(promises); // 모든 요청이 완료될 때까지 대기
+            // 2. 모든 요청이 끝날 때까지 단 한 번만 기다림
+            status.textContent = `병렬 요청 전송 완료! 응답 대기 중...`;
+            const storage = await Promise.all(tasks);
 
-            const time = ((Date.now() - start) / 1000).toFixed(2);
-            status.textContent = `✅ 완료: ${time}초 소요`;
+            // 3. 완료 즉시 일괄 렌더링
+            renderAll('async-display', storage);
+
+            const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            status.textContent = `✅ 완료: ${elapsed}초 소요`;
+            btn.disabled = false;
         }
     </script>
 </body>
